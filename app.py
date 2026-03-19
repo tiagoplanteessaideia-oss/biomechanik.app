@@ -2,7 +2,17 @@ import streamlit as st
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 import cv2
 import mediapipe as mp
+# Adicione esta linha abaixo para garantir que as soluções sejam carregadas
+from mediapipe.python.solutions import pose as mp_pose
+from mediapipe.python.solutions import drawing_utils as mp_drawing
 import numpy as np
+
+# Agora, remova ou comente as linhas antigas que davam erro:
+# mp_pose = mp.solutions.pose  <-- Pode apagar essa
+# pose = mp_pose.Pose()        <-- Mantenha esta, mas veja o ajuste abaixo
+
+# Ajuste a criação do objeto pose:
+pose = mp_pose.Pose(static_image_mode=False, model_complexity=1, min_detection_confidence=0.5)
 
 # Configurações iniciais da IA
 mp_pose = mp.solutions.pose
