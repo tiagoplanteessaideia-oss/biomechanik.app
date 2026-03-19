@@ -14,17 +14,21 @@ def calcular_angulo(a, b, c):
 
 class BiomecanicaProcessor(VideoProcessorBase):
     def __init__(self):
-        self.pose = mp.solutions.pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
-        self.mp_drawing = mp.solutions.drawing_utils
+        # Forma mais segura de carregar as soluções em 2026
         self.mp_pose = mp.solutions.pose
+        self.mp_drawing = mp.solutions.drawing_utils
+        # Iniciamos o modelo aqui
+        self.pose = self.mp_pose.Pose(
+            static_image_mode=False,
+            model_complexity=1,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
+        img = cv2.flip(img, 1) # Efeito espelho para o aluno
         
-        # Inverte para efeito espelho
-        img = cv2.flip(img, 1)
-        
-        # Converte para RGB para o MediaPipe
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         resultado = self.pose.process(img_rgb)
         
@@ -40,7 +44,7 @@ class BiomecanicaProcessor(VideoProcessorBase):
                 angulo = calcular_angulo(q, j, t)
                 cor = (0, 255, 0) if angulo < 100 else (0, 0, 255)
                 
-                # Desenha o esqueleto
+                # Desenha o esqueleto na imagem
                 self.mp_drawing.draw_landmarks(
                     img, 
                     resultado.pose_landmarks, 
@@ -48,19 +52,19 @@ class BiomecanicaProcessor(VideoProcessorBase):
                     connection_drawing_spec=self.mp_drawing.DrawingSpec(color=cor, thickness=3)
                 )
                 
-                # Texto do ângulo
+                # Mostra o ângulo
                 cv2.putText(img, f"Angulo: {int(angulo)}", (50, 100), 
                             cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3)
-            except:
+            except Exception:
                 pass
 
         return frame.from_ndarray(img, format="bgr24")
 
 st.title("Analisador Biomecânico Pro 🎾")
-st.write("Aguarde a câmera carregar e clique em 'Start'.")
+st.write("Dica: Fique de lado para a câmera para medir o ângulo do joelho.")
 
 webrtc_streamer(
-    key="biomecanica-v1", 
+    key="biomecanica-v2", # Mudei a chave para forçar um novo início
     video_processor_factory=BiomecanicaProcessor,
     media_stream_constraints={"video": True, "audio": False},
     rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
