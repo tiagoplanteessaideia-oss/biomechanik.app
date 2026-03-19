@@ -1,14 +1,10 @@
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import cv2
 import mediapipe as mp
 import numpy as np
 
-# Configuração simples do MediaPipe (Padrão 2026)
-mp_pose = mp.solutions.pose
-mp_drawing = mp.solutions.drawing_utils
-pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
-
+# Função matemática de apoio
 def calcular_angulo(a, b, c):
     a, b, c = np.array(a), np.array(b), np.array(c)
     radianos = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
@@ -16,31 +12,59 @@ def calcular_angulo(a, b, c):
     if angulo > 180.0: angulo = 360 - angulo
     return angulo
 
-class VideoProcessor(VideoTransformerBase):
-    def transform(self, frame):
+# A Classe que gerencia o vídeo
+class BiomecanicaProcessor(VideoProcessorBase):
+    def __init__(self):
+        # Iniciamos a IA aqui dentro, de forma protegida
+        self.mp_pose = mp.solutions.pose
+        self.mp_drawing = mp.solutions.drawing_utils
+        self.pose = self.mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+
+    def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
+        
+        # Inverte a imagem para parecer um espelho (melhor para o aluno)
+        img = cv2.flip(img, 1)
+        
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        resultado = pose.process(img_rgb)
+        resultado = self.pose.process(img_rgb)
         
         if resultado.pose_landmarks:
             landmarks = resultado.pose_landmarks.landmark
             
-            # Quadril(24), Joelho(26), Tornozelo(28)
+            # Coordenadas dos pontos 24, 26 e 28
             q = [landmarks[24].x, landmarks[24].y]
             j = [landmarks[26].x, landmarks[26].y]
             t = [landmarks[28].x, landmarks[28].y]
             
             angulo = calcular_angulo(q, j, t)
-            cor = (0, 255, 0) if angulo < 90 else (0, 0, 255)
             
-            mp_drawing.draw_landmarks(img, resultado.pose_landmarks, mp_pose.POSE_CONNECTIONS,
-                                     connection_drawing_spec=mp_drawing.DrawingSpec(color=cor, thickness=3))
+            # Feedback visual: Verde para agachado, Vermelho para em pé
+            cor = (0, 255, 0) if angulo < 100 else (0, 0, 255)
             
-            cv2.putText(img, f"Angulo: {int(angulo)}", (50, 50), 
+            # Desenha as conexões
+            self.mp_drawing.draw_landmarks(
+                img, 
+                resultado.pose_landmarks, 
+                self.mp_pose.POSE_CONNECTIONS,
+                connection_drawing_spec=self.mp_drawing.DrawingSpec(color=cor, thickness=3)
+            )
+            
+            # Escreve o ângulo na tela
+            cv2.putText(img, f"Angulo: {int(angulo)} deg", (50, 50), 
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-        return img
 
+        return frame.from_ndarray(img, format="bgr24")
+
+# Interface do Streamlit
+st.set_page_config(page_title="Analisador Biomecânico", layout="wide")
 st.title("Analisador Biomecânico 🎾")
-st.write("Dica: Use em local iluminado e de lado para a câmera.")
+st.write("Aponte a câmera lateralmente para o aluno.")
 
-webrtc_streamer(key="biomecanica", video_transformer_factory=VideoProcessor)
+# Chamada do WebRTC (o coração do app no celular)
+webrtc_streamer(
+    key="biomecanica", 
+    video_processor_factory=BiomecanicaProcessor,
+    rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}, # Ajuda a conectar no 4G/5G
+    media_stream_constraints={"video": True, "audio": False}
+)
